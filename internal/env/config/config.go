@@ -8,12 +8,19 @@ import (
 )
 
 type Config struct {
-	UsersDB UsersDBConfig `env:",prefix=USERS_DB_"`
-	LinksDB LinksDBConfig `env:",prefix=LINKS_DB_"`
+	UsersService UsersService `env:",prefix=USERS_"`
+	LinksService LinksService `env:",prefix=LINKS_"`
+	ApiGWService ApiGWService `env:",prefix=APIGW_"`
 }
 
-type LinksDBConfig struct {
-	MongoConfig
+type LinksService struct {
+	Mongo      MongoConfig     `env:",prefix=DB_"`
+	GRPCServer LinksGRPCConfig `env:",prefix=GRPC_"`
+}
+
+type LinksGRPCConfig struct {
+	Addr    string        `env:"ADDR,default=:51000"`
+	Timeout time.Duration `env:"TIMEOUT,default=10s"`
 }
 
 type MongoConfig struct {
@@ -31,8 +38,14 @@ func (m MongoConfig) ConnectionString() string {
 	return fmt.Sprintf("mongodb://%s:%d", m.Host, m.Port)
 }
 
-type UsersDBConfig struct {
-	PostgresConfig
+type UsersService struct {
+	Postgres   PostgresConfig  `env:",prefix=DB_"`
+	GRPCServer UsersGRPCConfig `env:",prefix=GRPC_"`
+}
+
+type UsersGRPCConfig struct {
+	Addr    string        `env:"ADDR,default=:52000"`
+	Timeout time.Duration `env:"TIMEOUT,default=10s"`
 }
 
 type PostgresConfig struct {
@@ -75,4 +88,12 @@ func (c PostgresConfig) ConnectionURL() string {
 	u.RawQuery = q.Encode()
 
 	return u.String()
+}
+
+type ApiGWService struct {
+	Addr            string        `env:"ADDR,default=:8080"`
+	ReadTimeout     time.Duration `env:"READ_TIMEOUT,default=30s"`
+	WriteTimeout    time.Duration `env:"WRITE_TIMEOUT,default=30s"`
+	UsersClientAddr string        `env:"USERS_CLIENT_ADDR,default=:52000"`
+	LinksClientAddr string        `env:"USERS_CLIENT_ADDR,default=:51000"`
 }

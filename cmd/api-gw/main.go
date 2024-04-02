@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"log/slog"
-	"net"
 	"os/signal"
 	"sync"
 	"syscall"
@@ -30,28 +29,24 @@ func runMain(ctx context.Context) error {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 
-	grpcServer := e.UsersGRPCServer
+	httpServer := e.ApiGWHTTPServer
 
 	go func() {
 		<-ctx.Done()
 		// если посылаем сигнал завершения то завершаем работу нашего сервера
-		grpcServer.Stop()
+		httpServer.Close()
 	}()
 
 	go func() {
 		defer wg.Done()
-		slog.Info(fmt.Sprintf("users grpc was started %s", e.Config.UsersService.GRPCServer.Addr))
 
-		lis, err := net.Listen("tcp", e.Config.UsersService.GRPCServer.Addr)
-		if err != nil {
-			slog.Error("net Listen", slog.Any("err", err))
+		slog.Info(fmt.Sprintf("api-gw http was started %s", e.Config.ApiGWService.Addr))
+		if err := httpServer.ListenAndServe(); err != nil {
+			slog.Error("api-gw http server", slog.Any("err", err))
 			return
 		}
 
-		if err := grpcServer.Serve(lis); err != nil {
-			slog.Error("net Listen", slog.Any("err", err))
-			return
-		}
+		httpServer.Close()
 	}()
 
 	wg.Wait()

@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"log/slog"
+	"net"
 	"os/signal"
+	"sync"
 	"syscall"
 
-	"go.mongodb.org/mongo-driver/bson/primitive"
-
-	"gitlab.com/robotomize/gb-golang/homework/03-01-umanager/internal/database/links"
-	"gitlab.com/robotomize/gb-golang/homework/03-01-umanager/internal/env"
+	"gitlab.com/robotomize/gb-golang/homework/03-02-umanager/internal/env"
 )
 
 func main() {
@@ -26,34 +26,36 @@ func runMain(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("setup.Setup: %w", err)
 	}
-	_ = e
-	create, err := e.LinksRepository.Create(
-		ctx, links.CreateReq{
-			ID:     primitive.NewObjectID(),
-			URL:    "https://ya.ru",
-			Title:  "ya main page",
-			Tags:   []string{"search", "yandex"},
-			Images: []string{},
-			UserID: "uuid", // created user id
-		},
-	)
-	if err != nil {
-		return err
-	}
 
-	found, err := e.LinksRepository.FindByUserAndURL(ctx, "https://ya.ru", "uuid")
-	if err != nil {
-		return err
-	}
+	wg := sync.WaitGroup{}
+	wg.Add(1)
 
-	foundBy, err := e.LinksRepository.FindByCriteria(
-		ctx, links.Criteria{
-			Tags: []string{"yandex"},
-		},
-	)
-	if err != nil {
-		return err
-	}
-	fmt.Println(create, found, foundBy)
+	grpcServer := e.LinksGRPCServer
+
+	go func() {
+		<-ctx.Done()
+		// если посылаем сигнал завершения то завершаем работу нашего сервера
+		grpcServer.Stop()
+	}()
+
+	go func() {
+		defer wg.Done()
+
+		slog.Info(fmt.Sprintf("links grpc was started %s", e.Config.LinksService.GRPCServer.Addr))
+
+		lis, err := net.Listen("tcp", e.Config.LinksService.GRPCServer.Addr)
+		if err != nil {
+			slog.Error("net Listen", slog.Any("err", err))
+			return
+		}
+
+		if err := grpcServer.Serve(lis); err != nil {
+			slog.Error("net Listen", slog.Any("err", err))
+			return
+		}
+	}()
+
+	wg.Wait()
+
 	return nil
 }
